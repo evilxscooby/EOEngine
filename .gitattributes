@@ -3,3 +3,4 @@
 *.ecf filter=lfs diff=lfs merge=lfs -text
 *.esf filter=lfs diff=lfs merge=lfs -text
 *.enf filter=lfs diff=lfs merge=lfs -text
+EndlessClient/EndlessClient/Resources/Game.ico -filter -diff -merge -text
