@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../common.targets" />
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>8.0</LangVersion>
+    <OutputType>Library</OutputType>
+    <OutputPath>..\bin\$(Configuration)\lib\</OutputPath>
+    <Description>Base library for Endless Online development</Description>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration.Contains(`Debug`))'">
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EOLib.Config\EOLib.Config.csproj" />
+    <ProjectReference Include="..\EOLib.IO\EOLib.IO.csproj" />
+    <ProjectReference Include="..\EOLib.Localization\EOLib.Localization.csproj" />
+    <ProjectReference Include="..\EOLib.Logger\EOLib.Logger.csproj" />
+    <ProjectReference Include="..\EOLib.Shared\EOLib.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Amadevus.RecordGenerator" Version="0.6.0" />
+    <PackageReference Include="AutomaticTypeMapper" Version="1.4.1" />
+    <PackageReference Include="Moffat.EndlessOnline.SDK" Version="1.0.1" />
+    <PackageReference Include="Optional" Version="4.0.0" />
+  </ItemGroup>
+</Project>

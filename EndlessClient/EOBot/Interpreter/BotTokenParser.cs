@@ -1,0 +1,385 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+namespace EOBot.Interpreter
+{
+    public sealed class BotTokenParser : IDisposable
+    {
+        public const string KEYWORD_IF = "if";
+        public const string KEYWORD_WHILE = "while";
+        public const string KEYWORD_GOTO = "goto";
+        public const string KEYWORD_ELSE = "else";
+        public const string KEYWORD_FOR = "for";
+        public const string KEYWORD_FOREACH = "foreach";
+        public const string KEYWORD_IN = "in";
+        public const string KEYWORD_CONTINUE = "continue";
+        public const string KEYWORD_BREAK = "break";
+        public const string KEYWORD_FUNC = "func";
+        public const string KEYWORD_RETURN = "return";
+
+        public const string KEYWORD_IS = "is";
+
+        public const string KEYWORD_UNDEFINED = "undefined";
+        public const string KEYWORD_TRUE = "true";
+        public const string KEYWORD_FALSE = "false";
+
+        public const string KEYWORD_BOOL = "bool";
+        public const string KEYWORD_INT = "int";
+        public const string KEYWORD_STRING = "string";
+        public const string KEYWORD_OBJECT = "Object";
+        public const string KEYWORD_ARRAY = "Array";
+        public const string KEYWORD_DICT = "Dict";
+
+        private static readonly HashSet<string> Keywords =
+        [
+            KEYWORD_IF,
+            KEYWORD_WHILE,
+            KEYWORD_GOTO,
+            KEYWORD_ELSE,
+            KEYWORD_FOR,
+            KEYWORD_FOREACH,
+            KEYWORD_IN,
+            KEYWORD_CONTINUE,
+            KEYWORD_BREAK,
+            KEYWORD_FUNC,
+            KEYWORD_RETURN,
+        ];
+
+        private static readonly HashSet<string> Operators = [KEYWORD_IS];
+        private static readonly HashSet<string> Literals = [KEYWORD_TRUE, KEYWORD_FALSE, KEYWORD_UNDEFINED];
+        private static readonly HashSet<string> Types = [KEYWORD_BOOL, KEYWORD_INT, KEYWORD_STRING, KEYWORD_OBJECT, KEYWORD_ARRAY, KEYWORD_DICT];
+
+        private readonly StreamReader _inputStream;
+        private readonly bool _streamNeedsDispose;
+
+        public int LineNumber { get; private set; }
+
+        public int Column { get; private set; }
+
+        public BotTokenParser(string filePath)
+            : this(File.OpenText(filePath))
+        {
+            _streamNeedsDispose = true;
+        }
+
+        public BotTokenParser(StreamReader inputStream)
+        {
+            _inputStream = inputStream;
+            LineNumber = 1;
+            Column = 1;
+        }
+
+        public void Reset()
+        {
+            _inputStream.BaseStream.Seek(0, SeekOrigin.Begin);
+            LineNumber = 1;
+            Column = 1;
+        }
+
+        public BotToken GetNextToken()
+        {
+            if (_inputStream.EndOfStream)
+                return Token(BotTokenType.EOF, string.Empty);
+
+            char inputChar;
+            do
+            {
+                inputChar = Read();
+
+                if (inputChar == '\n')
+                {
+                    LineNumber++;
+                    Column = 1;
+                    return Token(BotTokenType.NewLine, inputChar.ToString());
+                }
+
+                if (inputChar == '/' && !_inputStream.EndOfStream && Peek() == '*')
+                {
+                    // skip the comment: block format
+                    do
+                    {
+                        inputChar = Read();
+                        if (inputChar == '\n')
+                        {
+                            LineNumber++;
+                            Column = 1;
+                        }
+                    } while (!(inputChar == '*' && !_inputStream.EndOfStream && Peek() == '/'));
+
+                    // skip the slash ending the comment and set input char to the character after the comment
+                    Read();
+                    inputChar = Read();
+                }
+                else if (inputChar == '/' && !_inputStream.EndOfStream && Peek() == '/')
+                {
+                    // skip the comment: line format
+                    do
+                    {
+                        inputChar = Read();
+                    } while (inputChar != '\n' && !_inputStream.EndOfStream);
+
+                    LineNumber++;
+                    Column = 1;
+                    return Token(BotTokenType.NewLine, inputChar.ToString());
+                }
+            } while (!_inputStream.EndOfStream && char.IsWhiteSpace(inputChar));
+
+            if (char.IsLetter(inputChar))
+            {
+                var identifier = inputChar.ToString();
+                while ((char.IsLetterOrDigit(Peek()) || Peek() == '_') && !_inputStream.EndOfStream)
+                    identifier += Read();
+
+                BotTokenType type;
+                if (Operators.Contains(identifier))
+                {
+                    type = identifier switch
+                    {
+                        KEYWORD_IS => BotTokenType.IsOperator,
+                        _ => throw new ArgumentOutOfRangeException("You added a new text operator, didn't you."),
+                    };
+                }
+                else
+                {
+                    type = Keywords.Contains(identifier)
+                        ? BotTokenType.Keyword
+                        : Literals.Contains(identifier)
+                            ? BotTokenType.Literal
+                            : Types.Contains(identifier)
+                                ? BotTokenType.TypeSpecifier
+                                : BotTokenType.Identifier;
+                }
+
+                if (type == BotTokenType.Literal)
+                {
+                    return Literal(identifier, identifier == KEYWORD_UNDEFINED ? null : bool.Parse(identifier));
+                }
+                else
+                {
+                    return Token(type, identifier);
+                }
+            }
+            else if (char.IsDigit(inputChar))
+            {
+                var number = inputChar.ToString();
+                while (char.IsDigit(Peek()) && !_inputStream.EndOfStream)
+                    number += Read();
+                return Literal(number, int.Parse(number));
+            }
+            else
+            {
+                switch (inputChar)
+                {
+                    case '(': return Token(BotTokenType.LParen, inputChar.ToString());
+                    case ')': return Token(BotTokenType.RParen, inputChar.ToString());
+                    case '{': return Token(BotTokenType.LBrace, inputChar.ToString());
+                    case '}': return Token(BotTokenType.RBrace, inputChar.ToString());
+                    case '[': return Token(BotTokenType.LBracket, inputChar.ToString());
+                    case ']': return Token(BotTokenType.RBracket, inputChar.ToString());
+                    case ':': return Token(BotTokenType.Colon, inputChar.ToString());
+                    case ',': return Token(BotTokenType.Comma, inputChar.ToString());
+                    case '"':
+                        {
+                            var stringLiteral = string.Empty;
+                            while (Peek() != '"' && !_inputStream.EndOfStream)
+                                stringLiteral += Read();
+
+                            if (_inputStream.EndOfStream)
+                                return Token(BotTokenType.Error, string.Empty);
+
+                            Read();
+                            return Literal(stringLiteral, stringLiteral);
+                        }
+                    case '=':
+                        {
+                            switch (Peek())
+                            {
+                                case '=':
+                                    var nextChar = Read();
+                                    switch (Peek())
+                                    {
+                                        case '=':
+                                            var nextNextChar = Read();
+                                            return Token(BotTokenType.StrictEqualOperator, inputChar.ToString() + nextChar + nextNextChar);
+                                        default:
+                                            return Token(BotTokenType.EqualOperator, inputChar.ToString() + nextChar);
+                                    }
+                                default:
+                                    return Token(BotTokenType.AssignOperator, inputChar.ToString());
+                            }
+                        }
+                    case '!':
+                        {
+                            switch (Peek())
+                            {
+                                case '=':
+                                    var nextChar = Read();
+                                    switch (Peek())
+                                    {
+                                        case '=':
+                                            var nextNextChar = Read();
+                                            return Token(BotTokenType.StrictNotEqualOperator, inputChar.ToString() + nextChar + nextNextChar);
+                                        default:
+                                            return Token(BotTokenType.NotEqualOperator, inputChar.ToString() + nextChar);
+                                    }
+                                default:
+                                    return Token(BotTokenType.NotOperator, inputChar.ToString());
+                            }
+                        }
+                    case '>':
+                        {
+                            switch (Peek())
+                            {
+                                case '=':
+                                    var nextChar = Read();
+                                    return Token(BotTokenType.GreaterThanEqOperator, inputChar.ToString() + nextChar);
+                                default:
+                                    return Token(BotTokenType.GreaterThanOperator, inputChar.ToString());
+                            }
+                        }
+                    case '<':
+                        {
+                            switch (Peek())
+                            {
+                                case '=':
+                                    var nextChar = Read();
+                                    return Token(BotTokenType.LessThanEqOperator, inputChar.ToString() + nextChar);
+                                default:
+                                    return Token(BotTokenType.LessThanOperator, inputChar.ToString());
+                            }
+                        }
+                    case '$':
+                        {
+                            if (_inputStream.EndOfStream)
+                                return Token(BotTokenType.Error, inputChar.ToString());
+
+                            // ensure variable starts with letter or underscore before getting variable name
+                            inputChar = Peek();
+                            if (!char.IsLetter(inputChar) && inputChar != '_')
+                                return Token(BotTokenType.Error, inputChar.ToString());
+
+                            var variable = string.Empty;
+                            for (inputChar = Peek(); !_inputStream.EndOfStream && (char.IsLetterOrDigit(inputChar) || inputChar == '_'); inputChar = Peek())
+                            {
+                                variable += Read();
+                            }
+
+                            return Token(BotTokenType.Variable, variable);
+                        }
+                    case '|':
+                        {
+                            if (_inputStream.EndOfStream)
+                                return Token(BotTokenType.Error, inputChar.ToString());
+
+                            switch (Peek())
+                            {
+                                case '|':
+                                    var nextChar = Read();
+                                    return Token(BotTokenType.LogicalOrOperator, inputChar.ToString() + nextChar);
+                                default:
+                                    return Token(BotTokenType.Error, inputChar.ToString());
+                            }
+                        }
+                    case '&':
+                        {
+                            if (_inputStream.EndOfStream)
+                                return Token(BotTokenType.Error, inputChar.ToString());
+
+                            switch (Peek())
+                            {
+                                case '&':
+                                    var nextChar = Read();
+                                    return Token(BotTokenType.LogicalAndOperator, inputChar.ToString() + nextChar);
+                                default:
+                                    return Token(BotTokenType.Error, inputChar.ToString());
+                            }
+                        }
+                    case '+':
+                        if (_inputStream.EndOfStream)
+                            return Token(BotTokenType.PlusOperator, inputChar.ToString());
+
+                        return Peek() switch
+                        {
+                            '+' => Token(BotTokenType.Increment, $"{inputChar}{Read()}"),
+                            '=' => Token(BotTokenType.PlusEquals, $"{inputChar}{Read()}"),
+                            _ => Token(BotTokenType.PlusOperator, inputChar.ToString()),
+                        };
+                    case '-':
+                        {
+                            if (_inputStream.EndOfStream)
+                                return Token(BotTokenType.MinusOperator, inputChar.ToString());
+
+                            var number = string.Empty;
+                            while (char.IsDigit(Peek()) && !_inputStream.EndOfStream)
+                                number += Read();
+
+                            if (number.Length > 0)
+                            {
+                                return Token(BotTokenType.Literal, $"{inputChar}{number}");
+                            }
+
+                            return Peek() switch
+                            {
+                                '-' => Token(BotTokenType.Decrement, $"{inputChar}{Read()}"),
+                                '=' => Token(BotTokenType.MinusEquals, $"{inputChar}{Read()}"),
+                                _ => Token(BotTokenType.MinusOperator, inputChar.ToString()),
+                            };
+                        }
+                    case '*':
+                        if (_inputStream.EndOfStream)
+                            return Token(BotTokenType.MultiplyOperator, inputChar.ToString());
+
+                        return Peek() switch
+                        {
+                            '=' => Token(BotTokenType.MultiplyEquals, $"{inputChar}{Read()}"),
+                            _ => Token(BotTokenType.MultiplyOperator, inputChar.ToString()),
+                        };
+                    case '/':
+                        if (_inputStream.EndOfStream)
+                            return Token(BotTokenType.DivideOperator, inputChar.ToString());
+
+                        return Peek() switch
+                        {
+                            '=' => Token(BotTokenType.DivideEquals, $"{inputChar}{Read()}"),
+                            _ => Token(BotTokenType.DivideOperator, inputChar.ToString()),
+                        };
+                    case '%': return Token(BotTokenType.ModuloOperator, inputChar.ToString());
+                    case '.': return Token(BotTokenType.Dot, inputChar.ToString());
+                    case ';': return Token(BotTokenType.Semicolon, inputChar.ToString());
+                    default: return Token(BotTokenType.Error, inputChar.ToString());
+                }
+            }
+        }
+
+        private BotToken Token(BotTokenType tokenType, string tokenValue)
+        {
+            return new BotToken(tokenType, tokenValue, LineNumber, Column);
+        }
+
+        private LiteralBotToken Literal(string tokenValue, object literalValue)
+        {
+            return new LiteralBotToken(BotTokenType.Literal, tokenValue, literalValue, LineNumber, Column);
+        }
+
+        public void Dispose()
+        {
+            if (_streamNeedsDispose)
+                _inputStream.Dispose();
+
+            GC.SuppressFinalize(this);
+        }
+
+        private char Peek()
+        {
+            return (char)_inputStream.Peek();
+        }
+
+        private char Read()
+        {
+            Column++;
+            return (char)_inputStream.Read();
+        }
+    }
+}

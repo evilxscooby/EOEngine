@@ -1,0 +1,32 @@
+namespace EOLib.IO
+{
+    public enum ItemType : byte
+    {
+        Static,
+        UnknownType1,
+        Money,
+        Heal,
+        Teleport,
+        Spell,
+        EXPReward,
+        StatReward,
+        SkillReward,
+        Key,
+        Weapon,
+        Shield,
+        Armor,
+        Hat,
+        Boots,
+        Gloves,
+        Accessory,
+        Belt,
+        Necklace,
+        Ring,
+        Armlet,
+        Bracer,
+        Beer,
+        EffectPotion,
+        HairDye,
+        CureCurse
+    }
+}

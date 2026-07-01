@@ -1,0 +1,57 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "EndlessClient - Linux",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-client-linux",
+            "program": "${workspaceFolder}/bin/Debug/client/net8.0/EndlessClient",
+            "args": [],
+            "cwd": "${workspaceFolder}/bin/Debug/client/net8.0",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "EOBot - Linux",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-eobot-linux",
+            "program": "${workspaceFolder}/bin/Debug/utils/EOBot/net8.0/EOBot",
+            "args": [],
+            "cwd": "${workspaceFolder}/bin/Debug/utils/EOBot/net8.0",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "EndlessClient - Windows",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-client-windows",
+            "program": "${workspaceFolder}/bin/Debug/client/net8.0-windows/EndlessClient.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}/bin/Debug/client/net8.0-windows",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": "EndlessClient - Mac (arm64)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-client-mac-arm",
+            "program": "${workspaceFolder}/bin/Debug/client/net8.0-macos/osx-arm64/EndlessClient.app/Contents/MacOS/EndlessClient",
+            "args": [],
+            "cwd": "${workspaceFolder}/bin/Debug/client/net8.0-macos/osx-arm64/EndlessClient.app",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach"
+        }
+    ]
+}

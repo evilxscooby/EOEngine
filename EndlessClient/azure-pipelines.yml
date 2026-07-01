@@ -1,0 +1,197 @@
+name: 1.1.$(rev:rrr)
+
+pr:
+- master
+- feature/*
+
+trigger:
+- master
+- release/*
+
+schedules:
+- cron: 0 5 * * 6
+  branches:
+    include:
+    - master
+    - release/*
+  always: true
+
+strategy:
+  matrix:
+    linux:
+      imageName: "ubuntu-22.04"
+      friendlyPlatform: "Linux"
+      dropDir: net8.0
+      dotnetVersion: 8.0.x
+    windows:
+      imageName: "windows-2022"
+      friendlyPlatform: "Windows"
+      dropDir: net8.0-windows
+      dotnetVersion: 8.0.x
+    macos:
+      imageName: "macos-15"
+      friendlyPlatform: "macOS"
+      dropDir: net8.0-macos
+      dotnetVersion: "8.0.204"
+
+pool:
+  vmImage: $(imageName)
+
+variables:
+  buildConfiguration: Release
+
+steps:
+- checkout: self
+  persistCredentials: true
+- task: UseDotNet@2
+  displayName: 'Install .Net 8 runtime/sdk'
+  inputs:
+    version: $(dotnetVersion)
+- script: |
+    echo Mac OS version:
+    sw_vers -productVersion
+    echo
+    echo Installed Xcode versions:
+    ls /Applications | grep 'Xcode'
+    echo
+    echo currently selected xcode:
+    xcrun xcode-select --print-path
+    echo
+    echo selecting latest xcode...
+    sudo xcode-select -s /Applications/Xcode_16.1_Release_Candidate.app
+    xcrun xcode-select --print-path
+    xcodebuild -version
+  displayName: Select Xcode Version
+  condition: eq(variables.friendlyPlatform, 'macOS')
+
+#############################################
+# Assembly info and nuget properties
+- task: Assembly-Info-NetCore@3
+  displayName: 'Set assembly version and copyright info'
+  inputs:
+    Path: '$(Build.SourcesDirectory)'
+    FileNames: '**/*.csproj'
+    InsertAttributes: true
+    FileEncoding: 'auto'
+    WriteBOM: false
+    GenerateDocumentationFile: 'false'
+    Authors: 'Ethan Moffat'
+    Copyright: 'Copyright © 2014-2025 Ethan Moffat'
+    VersionNumber: '$(Build.BuildNumber)'
+    FileVersionNumber: '$(Build.BuildNumber)'
+    InformationalVersion: '$(Build.BuildNumber)'
+    LogLevel: 'verbose'
+    FailOnWarning: false
+    DisableTelemetry: false
+- task: Assembly-Info-NetCore@3
+  displayName: 'Set nuget package properties'
+  inputs:
+    Path: '$(Build.SourcesDirectory)'
+    FileNames: |
+      **/EOLib*.csproj
+      !**/EOLib.*Test.csproj
+    InsertAttributes: true
+    FileEncoding: 'auto'
+    WriteBOM: false
+    GeneratePackageOnBuild: 'true'
+    PackageRequireLicenseAcceptance: 'false'
+    PackageLicenseExpression: 'MIT'
+    PackageProjectUrl: 'https://github.com/ethanmoffat/EndlessClient'
+    RepositoryUrl: 'https://github.com/ethanmoffat/EndlessClient'
+    RepositoryType: 'git'
+    PackageTags: 'endless-online eo'
+    PackageVersion: '$(Build.BuildNumber)'
+    LogLevel: 'verbose'
+    FailOnWarning: false
+    DisableTelemetry: false
+#############################################
+
+#############################################
+# Restore/Build/Test
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet workload restore'
+  condition: eq(variables.friendlyPlatform, 'macOS')
+  inputs:
+    command: 'custom'
+    custom: 'workload'
+    arguments: 'restore $(Build.SourcesDirectory)/EndlessClient/EndlessClient.csproj'
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore'
+  inputs:
+    command: 'restore'
+    verbosityRestore: 'minimal'
+    projects: '$(Build.SourcesDirectory)/EndlessClient.sln'
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build'
+  inputs:
+    command: 'build'
+    projects: '$(Build.SourcesDirectory)/EndlessClient.sln'
+    arguments: '--configuration $(buildConfiguration)'
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet build - osx-arm64'
+  condition: eq(variables.friendlyPlatform, 'macOS')
+  inputs:
+    command: 'build'
+    projects: '$(Build.SourcesDirectory)/EndlessClient/EndlessClient.csproj'
+    arguments: '--configuration $(buildConfiguration) -r osx-arm64'
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet test - skipping EOLib.Graphics.Test (not supported on VSTS agent)'
+  inputs:
+    command: 'test'
+    projects: '$(Build.SourcesDirectory)/EndlessClient.sln'
+    arguments: '--no-build --filter "TestCategory!=GraphicsDevice" --configuration $(buildConfiguration)'
+    testRunTitle: $(friendlyPlatform)
+#############################################
+
+#############################################
+# EndlessClient + EOBot archive
+- task: ArchiveFiles@2
+  displayName: 'ZIP EndlessClient'
+  condition: and(succeeded(), not(eq(variables.friendlyPlatform, 'macOS')))
+  inputs:
+    rootFolderOrFile: $(Build.SourcesDirectory)/bin/$(buildConfiguration)/client/$(dropDir)/
+    archiveFile: $(Build.ArtifactStagingDirectory)/zip/EndlessClient.$(friendlyPlatform).zip
+- task: ArchiveFiles@2
+  displayName: 'ZIP EOBot'
+  inputs:
+    rootFolderOrFile: $(Build.SourcesDirectory)/bin/$(buildConfiguration)/utils/EOBot/net8.0/
+    archiveFile: $(Build.ArtifactStagingDirectory)/zip/EOBot.$(friendlyPlatform).zip
+# EndlessClient archive (macOS multi-target)
+- task: ArchiveFiles@2
+  displayName: 'ZIP EndlessClient (arm64)'
+  condition: and(succeeded(), eq(variables.friendlyPlatform, 'macOS'))
+  inputs:
+    rootFolderOrFile: $(Build.SourcesDirectory)/bin/$(buildConfiguration)/client/$(dropDir)/osx-arm64/EndlessClient.app
+    archiveFile: $(Build.ArtifactStagingDirectory)/zip/EndlessClient.$(friendlyPlatform).arm64.zip
+- task: ArchiveFiles@2
+  displayName: 'ZIP EndlessClient (x64)'
+  condition: and(succeeded(), eq(variables.friendlyPlatform, 'macOS'))
+  inputs:
+    rootFolderOrFile: $(Build.SourcesDirectory)/bin/$(buildConfiguration)/client/$(dropDir)/osx-x64/EndlessClient.app
+    archiveFile: $(Build.ArtifactStagingDirectory)/zip/EndlessClient.$(friendlyPlatform).x64.zip
+# Publish zip artifacts
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish Artifacts'
+  inputs:
+    PathtoPublish: $(Build.ArtifactStagingDirectory)/zip
+    ArtifactName: EndlessClient
+#############################################
+
+- task: CopyFiles@2
+  displayName: 'Copy nuget packages'
+  inputs:
+    SourceFolder: '$(Build.SourcesDirectory)/bin/$(buildConfiguration)/'
+    Contents: '**/*.nupkg'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)/nuget'
+- task: PublishBuildArtifacts@1
+  displayName: 'Publish nuget Artifacts'
+  inputs:
+    PathtoPublish: $(Build.ArtifactStagingDirectory)/nuget
+    ArtifactName: nuget.$(friendlyPlatform)
+
+- script: |
+    git tag build/$(Build.BuildNumber)
+    git push origin build/$(Build.BuildNumber)
+  workingDirectory:  $(Build.SourcesDirectory)
+  displayName: Tag sources on CI/Manual builds
+  condition: and(succeeded(), or(eq(variables['build.reason'], 'IndividualCI'), eq(variables['build.reason'], 'Manual')))

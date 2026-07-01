@@ -5,6 +5,7 @@
 
 ## Table of Contents
 
+- [Repository Layout](#repository-layout)
 - [Getting Started on Windows](#getting-started-on-windows)
 - [Getting Started on Linux](#getting-started-on-linux)
 - [Docker Image](#docker-image)
@@ -12,6 +13,18 @@
 - [Development](#development)
 - [Integration Tests](#integration-tests)
 - [Sample servers](#sample-servers)
+
+## Repository Layout
+
+EOEngine now serves as a monorepo for multiple Endless Online projects:
+
+- `./` - ETHEOS server sources and existing build/test tooling
+- `./EndlessClient/` - EndlessClient C# client
+- `./eolib-go/` - eolib-go Go library
+- `./eolib-dotnet/` - eolib-dotnet .NET library
+- `./eo-captured-packets/` - captured Endless Online packet JSON data
+
+Each imported project keeps its original repository name as its top-level directory so its history and tooling remain easy to follow inside the unified repository.
 
 ## Getting Started on Windows
 
