@@ -1,0 +1,36 @@
+{
+  "family": "Quest",
+  "action": "Accept",
+  "expected": "bcxJTx7+Hv4CAQ==",
+  "properties": [
+    {
+      "type": "int",
+      "name": "session_id",
+      "value": 51467
+    },
+    {
+      "type": "int",
+      "name": "dialog_id",
+      "value": 19806
+    },
+    {
+      "type": "int",
+      "name": "quest_id",
+      "value": 29
+    },
+    {
+      "type": "int",
+      "name": "behavior_id",
+      "value": 29
+    },
+    {
+      "type": "protocol/net/client::DialogReply",
+      "name": "reply_type",
+      "value": 1
+    },
+    {
+      "type": "protocol/net/client::QuestAcceptReplyTypeDataOk",
+      "name": "reply_type_data"
+    }
+  ]
+}
